@@ -1,0 +1,41 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+allow_public_ssh_keys: true
+ssh_authorized_keys:
+  - ${public_key}
+
+# Install Docker from the official Docker repository
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - unattended-upgrades
+
+runcmd:
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update  
+  - apt-get install -y docker-ce docker-ce-cli containerd.io
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Run postgres and pgadmin containers
+  - docker network create pg-network
+  - docker volume create pgdata
+  - docker volume create pgadmin
+  - docker run --name postgres --restart always -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=${password} --network pg-network -p 127.0.0.1:5432:5432 -v pgdata:/var/lib/postgresql/docker -d postgres:18
+  - docker run --name pgadmin --restart always -e PGADMIN_DEFAULT_EMAIL=postgres@example.com -e PGADMIN_DEFAULT_PASSWORD=${password} --network pg-network -p 127.0.0.1:8080:80 -v pgadmin:/var/lib/pgadmin -d dpage/pgadmin4:latest
+
+power_state:
+  delay: now
+  mode: reboot
+  message: "Rebooting after initial setup"
+  condition: true
+
+final_message: "The system is up"
