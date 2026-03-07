@@ -1,5 +1,13 @@
 #cloud-config
 
+# Write SSH config for custom port
+write_files:
+  - path: /etc/ssh/sshd_config.d/custom_port.conf
+    content: |
+      Port ${ssh_port}
+    owner: root:root
+    permissions: '0644'
+
 package_update: true
 package_upgrade: true
 
@@ -17,8 +25,8 @@ packages:
   - unattended-upgrades
 
 runcmd:
-  - echo "Port ${ssh_port}" > /etc/ssh/sshd_config.d/custom_port.conf
-  - systemctl restart sshd
+  # Restart SSH to apply port configuration
+  - systemctl restart ssh
   - install -m 0755 -d /etc/apt/keyrings
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker-archive-keyring.gpg
   - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
