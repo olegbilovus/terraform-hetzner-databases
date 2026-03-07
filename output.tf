@@ -3,7 +3,7 @@ output "ip" {
 }
 
 output "warn" {
-  value = "Run the ssh port forward in an external terminal, VSCode may not be allowed to open ports"
+  value = "Run the ssh port forward in an external terminal, VSCode may not be allowed to open ports. It may take a couple of minutes before the server is accessible."
 }
 
 output "ssh-tunnel-cmd" {
