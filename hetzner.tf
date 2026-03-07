@@ -8,7 +8,7 @@ resource "hcloud_firewall" "ssh-only" {
   rule {
     direction = "in"
     protocol  = "tcp"
-    port      = 22
+    port      = var.ssh-port
     source_ips = [
       "0.0.0.0/0",
       "::/0"
@@ -33,5 +33,6 @@ resource "hcloud_server" "postgres" {
   user_data = templatefile("${path.module}/cloud-init.yaml", {
     public_key = var.postgres-public_key
     password   = var.postgres_password
+    ssh_port   = var.ssh-port
   })
 }
