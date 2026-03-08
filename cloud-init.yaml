@@ -6,7 +6,33 @@ write_files:
     content: |
       Port ${ssh_port}
     owner: root:root
-    permissions: '0644'
+    permissions: "0644"
+
+  # Write pgAdmin server configuration and password file
+  - path: /opt/pgadmin/servers.json
+    content: |
+      {
+        "Servers": {
+          "1": {
+            "Name": "PostgreSQL",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "postgres",
+            "Username": "postgres",
+            "PassFile": "/pgadmin4/pgpassfile",
+            "SSLMode": "prefer"
+          }
+        }
+      }
+    owner: root:root
+    permissions: "0644"
+
+  - path: /opt/pgadmin/pgpassfile
+    content: |
+      *:5432:*:postgres:${password}
+    owner: root:root
+    permissions: "0600"
 
 package_update: true
 package_upgrade: true
@@ -30,7 +56,7 @@ runcmd:
   - install -m 0755 -d /etc/apt/keyrings
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker-archive-keyring.gpg
   - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-  - apt-get update  
+  - apt-get update
   - apt-get install -y docker-ce docker-ce-cli containerd.io
   - systemctl enable docker
   - systemctl start docker
@@ -40,7 +66,8 @@ runcmd:
   - docker volume create pgdata
   - docker volume create pgadmin
   - docker run --name postgres --restart always -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=${password} --network pg-network -p 127.0.0.1:5432:5432 -v pgdata:/var/lib/postgresql/docker -d postgres:18
-  - docker run --name pgadmin --restart always -e PGADMIN_DEFAULT_EMAIL=postgres@example.com -e PGADMIN_DEFAULT_PASSWORD=${password} --network pg-network -p 127.0.0.1:8080:80 -v pgadmin:/var/lib/pgadmin -d dpage/pgadmin4:latest
+  - chown 5050:5050 /opt/pgadmin/pgpassfile
+  - docker run --name pgadmin --restart always -e PGADMIN_DEFAULT_EMAIL=postgres@example.com -e PGADMIN_DEFAULT_PASSWORD=${password} -e PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False -e PGPASSFILE=/pgadmin4/pgpassfile --network pg-network -p 127.0.0.1:8080:80 -v pgadmin:/var/lib/pgadmin -v /opt/pgadmin/servers.json:/pgadmin4/servers.json:ro -v /opt/pgadmin/pgpassfile:/pgadmin4/pgpassfile -d dpage/pgadmin4:latest
 
 power_state:
   delay: now
