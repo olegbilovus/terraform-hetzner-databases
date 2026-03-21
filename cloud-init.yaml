@@ -7,6 +7,7 @@ write_files:
       Port ${ssh_port}
     owner: root:root
     permissions: "0644"
+%{ if enable_postgres ~}
 
   # Write pgAdmin server configuration and password file
   - path: /opt/pgadmin/servers.json
@@ -33,6 +34,22 @@ write_files:
       *:5432:*:postgres:${password}
     owner: root:root
     permissions: "0600"
+%{ endif ~}
+%{ if enable_mongo ~}
+
+  # Write Mongo Express environment config
+  - path: /opt/mongo-express/.env
+    content: |
+      ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD=${password}
+      ME_CONFIG_MONGODB_URL=mongodb://admin:${password}@mongo:27017/
+      ME_CONFIG_BASICAUTH=true
+      ME_CONFIG_BASICAUTH_USERNAME=admin
+      ME_CONFIG_BASICAUTH_PASSWORD=${password}
+    owner: root:root
+    permissions: "0600"
+
+%{ endif ~}
 
 package_update: true
 package_upgrade: true
@@ -62,12 +79,22 @@ runcmd:
   - systemctl start docker
 
   # Run postgres and pgadmin containers
+%{ if enable_postgres ~}
   - docker network create pg-network
   - docker volume create pgdata
   - docker volume create pgadmin
   - docker run --name postgres --restart always -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=${password} --network pg-network -p 127.0.0.1:5432:5432 -v pgdata:/var/lib/postgresql/docker -d postgres:18
   - chown 5050:5050 /opt/pgadmin/pgpassfile
   - docker run --name pgadmin --restart always -e PGADMIN_DEFAULT_EMAIL=postgres@example.com -e PGADMIN_DEFAULT_PASSWORD=${password} -e PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False -e PGPASSFILE=/pgadmin4/pgpassfile --network pg-network -p 127.0.0.1:8080:80 -v pgadmin:/var/lib/pgadmin -v /opt/pgadmin/servers.json:/pgadmin4/servers.json:ro -v /opt/pgadmin/pgpassfile:/pgadmin4/pgpassfile -d dpage/pgadmin4:latest
+%{ endif ~}
+
+  # Run MongoDB and Mongo Express containers
+%{ if enable_mongo ~}
+  - docker network create mongo-network
+  - docker volume create mongodata
+  - docker run --name mongo --restart always -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=${password} --network mongo-network -p 127.0.0.1:27017:27017 -v mongodata:/data/db -d mongo:8
+  - docker run --name mongo-express --restart always --env-file /opt/mongo-express/.env --network mongo-network -p 127.0.0.1:8081:8081 -d mongo-express:latest
+%{ endif ~}
 
 power_state:
   delay: now

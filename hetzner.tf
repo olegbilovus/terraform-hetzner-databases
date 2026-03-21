@@ -31,8 +31,10 @@ resource "hcloud_server" "postgres" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
-    public_key = var.postgres-public_key
-    password   = var.postgres_password
-    ssh_port   = var.ssh-port
+    public_key              = var.postgres-public_key
+    password                = var.postgres_password
+    ssh_port                = var.ssh-port
+    enable_postgres         = var.enable_postgres
+    enable_mongo            = var.enable_mongo
   })
 }

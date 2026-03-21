@@ -16,3 +16,13 @@ variable "ssh-port" {
   type    = number
   default = 22
 }
+
+variable "enable_postgres" {
+  type    = bool
+  default = true
+}
+
+variable "enable_mongo" {
+  type    = bool
+  default = true
+}
