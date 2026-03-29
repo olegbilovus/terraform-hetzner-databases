@@ -1,6 +1,23 @@
-resource "hcloud_ssh_key" "postgres" {
-  name       = "postgres-ssk-key"
-  public_key = var.postgres-public_key
+resource "tls_private_key" "ssh-key" {
+  algorithm = "ED25519"
+}
+
+# On windows, the file permission is ignored, you can set it manually with `icacls hetzner /inheritance:r /grant:r "$($env:USERNAME):R"`
+resource "local_file" "ssh_key" {
+  content         = resource.tls_private_key.ssh-key.private_key_openssh
+  filename        = "${path.module}/hetzner"
+  file_permission = "0600"
+}
+
+resource "local_file" "ssh_key_pub" {
+  content         = resource.tls_private_key.ssh-key.public_key_openssh
+  filename        = "${path.module}/hetzner.pub"
+  file_permission = "0644"
+}
+
+resource "hcloud_ssh_key" "db-server" {
+  name       = "db-server-ssh-key"
+  public_key = resource.tls_private_key.ssh-key.public_key_openssh
 }
 
 resource "hcloud_firewall" "ssh-only" {
@@ -16,13 +33,13 @@ resource "hcloud_firewall" "ssh-only" {
   }
 }
 
-resource "hcloud_server" "postgres" {
-  name        = "postgres"
+resource "hcloud_server" "db-server" {
+  name        = "db-server"
   image       = "ubuntu-24.04"
   server_type = "cx23"
   location    = "fsn1"
 
-  ssh_keys     = [hcloud_ssh_key.postgres.id]
+  ssh_keys     = [hcloud_ssh_key.db-server.id]
   firewall_ids = [hcloud_firewall.ssh-only.id]
 
   public_net {
@@ -31,10 +48,11 @@ resource "hcloud_server" "postgres" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
-    public_key              = var.postgres-public_key
-    password                = var.postgres_password
-    ssh_port                = var.ssh-port
-    enable_postgres         = var.enable_postgres
-    enable_mongo            = var.enable_mongo
+    public_key        = resource.tls_private_key.ssh-key.public_key_openssh
+    password          = var.postgres_password
+    ssh_port          = var.ssh-port
+    enable_postgres   = var.enable_postgres
+    enable_mongo      = var.enable_mongo
+    enable_lazydocker = var.enable_lazydocker
   })
 }

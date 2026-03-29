@@ -3,10 +3,6 @@ variable "hcloud_token" {
   type      = string
 }
 
-variable "postgres-public_key" {
-  type = string
-}
-
 variable "postgres_password" {
   sensitive = true
   type      = string
@@ -23,6 +19,11 @@ variable "enable_postgres" {
 }
 
 variable "enable_mongo" {
+  type    = bool
+  default = true
+}
+
+variable "enable_lazydocker" {
   type    = bool
   default = true
 }

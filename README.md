@@ -1,6 +1,6 @@
 # Hetzner Database Deployment
 
-This Terraform project deploys a database server on Hetzner Cloud with optional PostgreSQL + pgAdmin and MongoDB + Mongo Express stacks. Services run in Docker containers and are exposed only through SSH tunneling for secure remote access.
+This Terraform project deploys a database server on Hetzner Cloud with optional PostgreSQL + pgAdmin, MongoDB + Mongo Express, and Lazydocker stacks. Services run in Docker containers and are exposed only through SSH tunneling for secure remote access. The SSH key for server access is generated automatically during deployment.
 
 ## Architecture
 
@@ -10,8 +10,10 @@ The infrastructure includes:
 - Firewall configured to allow SSH access only (customizable with `ssh-port`)
 - Optional PostgreSQL 18 + pgAdmin4 stack
 - Optional MongoDB 8 + Mongo Express stack
+- Optional Lazydocker TUI for Docker management
 - All database/web UI ports bound to loopback for security
 - Persistent Docker volumes for stateful services
+- SSH key pair is generated automatically and saved as `hetzner` (private) and `hetzner.pub` (public) in the project directory. On Windows, the private key file permissions may need to be set manually with `icacls hetzner /inheritance:r /grant:r "$($env:USERNAME):R"`.
 
 ## Prerequisites
 
@@ -19,33 +21,47 @@ Before deploying, ensure you have:
 
 1. **Terraform** (or OpenTofu) installed on your local machine
 2. **Hetzner Cloud account** with API token
-3. **SSH key pair** for server access
-4. **Hetzner Cloud API token** with read/write permissions
+3. **Hetzner Cloud API token** with read/write permissions
+
+> **Note:** You do **not** need to provide your own SSH key. The deployment will generate a new SSH key pair (`hetzner` and `hetzner.pub`) in the project directory for server access.
 
 ## Terraform Variables
 
 | Variable              | Type   | Description                         | Sensitive |
 | --------------------- | ------ | ----------------------------------- | --------- |
-| `hcloud_token`        | string | Hetzner Cloud API token             | Yes       |
-| `postgres-public_key` | string | SSH public key for server access    | No        |
+| `hcloud_token`        | string | Hetzner Cloud API token              | Yes      |
 | `postgres_password`   | string | Shared password for enabled services | Yes      |
 | `ssh-port`            | number | SSH port opened in firewall and SSHD | No       |
 | `enable_postgres`     | bool   | Deploy PostgreSQL + pgAdmin          | No       |
 | `enable_mongo`        | bool   | Deploy MongoDB + Mongo Express       | No       |
+| `enable_lazydocker`   | bool   | Deploy Lazydocker TUI for Docker      | No       |
 
 ### Example `terraform.tfvars`
 
 ```hcl
-postgres-public_key = "ssh-ed25519 AAAA..."
-postgres_password   = "replace-with-strong-password"
-hcloud_token        = "replace-with-hcloud-token"
+postgres_password = "replace-with-strong-password"
+hcloud_token      = "replace-with-hcloud-token"
 
-ssh-port        = 443
-enable_postgres = true
-enable_mongo    = true
+ssh-port          = 443
+enable_postgres   = true
+enable_mongo      = true
+enable_lazydocker = true
 ```
 
 ## Accessing the Services
+
+## SSH Key Usage
+
+After deployment, a new SSH key pair will be created in your project directory:
+
+- `hetzner` (private key)
+- `hetzner.pub` (public key)
+
+Use the `hetzner` private key for SSH access and tunneling. Example:
+
+```bash
+ssh -i hetzner -p <ssh-port> root@<server-ip>
+```
 
 ### SSH Tunnel
 

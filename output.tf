@@ -1,9 +1,9 @@
 output "ip" {
-  value = hcloud_server.postgres.ipv4_address
+  value = hcloud_server.db-server.ipv4_address
 }
 
-output "warn" {
-  value = "Run the ssh port forward in an external terminal, VSCode may not be allowed to open ports. It may take a couple of minutes before the server is accessible."
+output "ports" {
+  value = "Available ports: ${var.enable_postgres ? "5433:PostgreSQL 8900:pgAdmin" : ""} ${var.enable_mongo ? "27018:MongoDB 8901:MongoExpress" : ""}"
 }
 
 locals {
@@ -13,5 +13,5 @@ locals {
 }
 
 output "ssh-tunnel-cmd" {
-  value = "ssh -i hetzner -p ${var.ssh-port} ${local.ssh_tunnels != "" ? local.ssh_tunnels : ""} root@${hcloud_server.postgres.ipv4_address}"
+  value = "ssh -i hetzner -p ${var.ssh-port} ${local.ssh_tunnels != "" ? local.ssh_tunnels : ""} root@${hcloud_server.db-server.ipv4_address}"
 }
