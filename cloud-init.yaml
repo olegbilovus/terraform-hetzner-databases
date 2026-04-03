@@ -54,6 +54,7 @@ write_files:
 package_update: true
 package_upgrade: true
 
+ssh_pwauth: false
 allow_public_ssh_keys: true
 ssh_authorized_keys:
   - ${public_key}

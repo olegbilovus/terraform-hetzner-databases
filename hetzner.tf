@@ -15,6 +15,15 @@ resource "local_file" "ssh_key_pub" {
   file_permission = "0644"
 }
 
+resource "random_password" "ran_pwd" {
+  length      = 16
+  special     = false
+  min_numeric = 5
+  upper       = true
+  lower       = true
+  numeric     = true
+}
+
 resource "hcloud_ssh_key" "db-server" {
   name       = "db-server-ssh-key"
   public_key = resource.tls_private_key.ssh-key.public_key_openssh
@@ -49,7 +58,7 @@ resource "hcloud_server" "db-server" {
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
     public_key        = resource.tls_private_key.ssh-key.public_key_openssh
-    password          = var.postgres_password
+    password          = resource.random_password.ran_pwd.result
     ssh_port          = var.ssh-port
     enable_postgres   = var.enable_postgres
     enable_mongo      = var.enable_mongo

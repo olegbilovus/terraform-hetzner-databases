@@ -8,6 +8,7 @@ The infrastructure includes:
 
 - Hetzner Cloud server (cx23) running Ubuntu 24.04 in Falkenstein datacenter
 - Firewall configured to allow SSH access only (customizable with `ssh-port`)
+- SSH password authentication disabled (`ssh_pwauth: false`)
 - Optional PostgreSQL 18 + pgAdmin4 stack
 - Optional MongoDB 8 + Mongo Express stack
 - Optional Lazydocker TUI for Docker management
@@ -30,7 +31,6 @@ Before deploying, ensure you have:
 | Variable              | Type   | Description                         | Sensitive |
 | --------------------- | ------ | ----------------------------------- | --------- |
 | `hcloud_token`        | string | Hetzner Cloud API token              | Yes      |
-| `postgres_password`   | string | Shared password for enabled services | Yes      |
 | `ssh-port`            | number | SSH port opened in firewall and SSHD | No       |
 | `enable_postgres`     | bool   | Deploy PostgreSQL + pgAdmin          | No       |
 | `enable_mongo`        | bool   | Deploy MongoDB + Mongo Express       | No       |
@@ -39,7 +39,6 @@ Before deploying, ensure you have:
 ### Example `terraform.tfvars`
 
 ```hcl
-postgres_password = "replace-with-strong-password"
 hcloud_token      = "replace-with-hcloud-token"
 
 ssh-port          = 443
@@ -48,7 +47,25 @@ enable_mongo      = true
 enable_lazydocker = true
 ```
 
+## Generated Service Password
+
+Terraform now generates a strong shared password automatically for PostgreSQL, pgAdmin, MongoDB, and Mongo Express.
+
+Retrieve it with:
+
+```bash
+terraform output -raw password
+```
+
 ## Accessing the Services
+
+### View Available Ports
+
+Use the structured output for a clean port mapping:
+
+```bash
+terraform output available_ports
+```
 
 ## SSH Key Usage
 
@@ -95,7 +112,7 @@ Or use any PostgreSQL client with these connection details:
 - Host: `127.0.0.1`
 - Port: `5433`
 - Username: `postgres`
-- Password: The password you set in `terraform.tfvars`
+- Password: The value from `terraform output -raw password`
 
 ### Accessing pgAdmin
 
@@ -108,7 +125,7 @@ http://127.0.0.1:8900
 Login credentials:
 
 - Email: `postgres@example.com`
-- Password: The password you set in `terraform.tfvars`
+- Password: The value from `terraform output -raw password`
 
 ### Connecting to MongoDB
 
@@ -123,7 +140,7 @@ Or use your MongoDB client with:
 - Host: `127.0.0.1`
 - Port: `27018`
 - Username: `admin`
-- Password: The password you set in `terraform.tfvars`
+- Password: The value from `terraform output -raw password`
 - Auth database: `admin`
 
 ### Accessing Mongo Express
@@ -137,7 +154,7 @@ http://127.0.0.1:8901
 Login credentials:
 
 - Username: `admin`
-- Password: The password you set in `terraform.tfvars`
+- Password: The value from `terraform output -raw password`
 
 ## Infrastructure Details
 
@@ -185,8 +202,9 @@ After deployment, the following outputs are available:
 | Output           | Description                                 |
 | ---------------- | ------------------------------------------- |
 | `ip`             | Public IPv4 address of the server           |
-| `warn`           | Reminder about external terminal + startup delay |
+| `available_ports`| Structured local/remote port mapping for enabled stacks |
 | `ssh-tunnel-cmd` | Complete SSH tunnel command for easy access |
+| `password`       | Generated shared password for enabled services |
 
 View outputs anytime with:
 
