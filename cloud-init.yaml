@@ -97,6 +97,29 @@ runcmd:
   - docker run --name mongo-express --restart always --env-file /opt/mongo-express/.env --network mongo-network -p 127.0.0.1:8081:8081 -d mongo-express:latest
 %{ endif ~}
 
+  # Run Redis and RedisInsight containers
+%{ if enable_redis ~}
+  - docker network create redis-network
+  - docker volume create redisdata
+  - docker volume create redisinsight
+  - docker run --name redis --restart always --network redis-network -p 127.0.0.1:6379:6379 -v redisdata:/data -d redis:trixie redis-server --requirepass ${password}
+  - docker run --name redisinsight --restart always -e RI_REDIS_HOST=redis -e RI_REDIS_PORT=6379 -e RI_REDIS_ALIAS=Redis -e RI_REDIS_PASSWORD=${password} --network redis-network -p 127.0.0.1:5540:5540 -v redisinsight:/data -d redis/redisinsight:latest
+%{ if enable_redis_seed ~}
+  - |
+    echo "Waiting for Redis dump file from Terraform..."
+    while [ ! -f /tmp/dump.rdb ]; do
+      sleep 5
+    done
+    echo "Seeding Redis from dump..."
+    docker stop redis
+    cp /tmp/dump.rdb /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    chmod 644 /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    rm -f /tmp/dump.rdb
+    docker start redis
+    echo "Redis seeded successfully"
+%{ endif ~}
+%{ endif ~}
+
   # Install lazydocker 
 %{ if enable_lazydocker ~}
   - |

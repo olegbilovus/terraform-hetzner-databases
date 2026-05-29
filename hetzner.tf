@@ -66,6 +66,42 @@ resource "hcloud_server" "db-server" {
     ssh_port          = var.ssh-port
     enable_postgres   = var.enable_postgres
     enable_mongo      = var.enable_mongo
+    enable_redis      = var.enable_redis
+    enable_redis_seed = var.redis_dump_path != ""
     enable_lazydocker = var.enable_lazydocker
   })
+}
+
+resource "terraform_data" "redis_dump_import" {
+  count = var.enable_redis && var.redis_dump_path != "" ? 1 : 0
+
+  depends_on = [hcloud_server.db-server]
+
+  # Re-run whenever the dump file content changes.
+  triggers_replace = [filesha256(var.redis_dump_path)]
+
+  connection {
+    type        = "ssh"
+    host        = hcloud_server.db-server.ipv4_address
+    user        = "root"
+    private_key = tls_private_key.ssh-key.private_key_openssh
+    port        = var.ssh-port
+    # Retries until SSH is available (server may still be mid-boot).
+    timeout = "5m"
+  }
+
+  # Upload the dump so cloud-init's wait loop can pick it up.
+  provisioner "file" {
+    source      = var.redis_dump_path
+    destination = "/tmp/dump.rdb"
+  }
+
+  # On initial provisioning cloud-init is still running and owns the import —
+  # it will stop Redis, seed it, and reboot when it finds the file above.
+  # On re-applies (server already up, cloud-init done) we import directly.
+  provisioner "remote-exec" {
+    inline = [
+      "if cloud-init status 2>/dev/null | grep -q done; then docker stop redis && cp /tmp/dump.rdb /var/lib/docker/volumes/redisdata/_data/dump.rdb && chmod 644 /var/lib/docker/volumes/redisdata/_data/dump.rdb && rm -f /tmp/dump.rdb && docker start redis; fi"
+    ]
+  }
 }

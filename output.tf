@@ -27,12 +27,25 @@ locals {
         remote_port = 8081
         service     = "Mongo Express"
       }
+    } : {},
+    var.enable_redis ? {
+      redis = {
+        local_port  = 6380
+        remote_port = 6379
+        service     = "Redis"
+      }
+      redisinsight = {
+        local_port  = 8902
+        remote_port = 5540
+        service     = "RedisInsight"
+      }
     } : {}
   )
 
   postgres_tunnels = var.enable_postgres ? "-L 127.0.0.1:5433:127.0.0.1:5432 -L 127.0.0.1:8900:127.0.0.1:8080" : ""
   mongo_tunnels    = var.enable_mongo ? "-L 127.0.0.1:27018:127.0.0.1:27017 -L 127.0.0.1:8901:127.0.0.1:8081" : ""
-  ssh_tunnels      = trimspace("${local.postgres_tunnels} ${local.mongo_tunnels}")
+  redis_tunnels    = var.enable_redis ? "-L 127.0.0.1:6380:127.0.0.1:6379 -L 127.0.0.1:8902:127.0.0.1:5540" : ""
+  ssh_tunnels      = trimspace("${local.postgres_tunnels} ${local.mongo_tunnels} ${local.redis_tunnels}")
 }
 
 output "available_ports" {

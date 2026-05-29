@@ -1,6 +1,6 @@
 # Hetzner Database Deployment
 
-This Terraform project deploys a database server on Hetzner Cloud with optional PostgreSQL + pgAdmin, MongoDB + Mongo Express, and Lazydocker stacks. Services run in Docker containers and are exposed only through SSH tunneling for secure remote access. The SSH key for server access is generated automatically during deployment.
+This Terraform project deploys a database server on Hetzner Cloud with optional PostgreSQL + pgAdmin, MongoDB + Mongo Express, Redis + RedisInsight, and Lazydocker stacks. Services run in Docker containers and are exposed only through SSH tunneling for secure remote access. The SSH key for server access is generated automatically during deployment.
 
 ## Architecture
 
@@ -11,6 +11,7 @@ The infrastructure includes:
 - SSH password authentication disabled (`ssh_pwauth: false`)
 - Optional PostgreSQL 18 + pgAdmin4 stack
 - Optional MongoDB 8 + Mongo Express stack
+- Optional Redis + RedisInsight stack
 - Optional Lazydocker TUI for Docker management
 - All database/web UI ports bound to loopback for security
 - Persistent Docker volumes for stateful services
@@ -34,6 +35,8 @@ Before deploying, ensure you have:
 | `ssh-port`            | number | SSH port opened in firewall and SSHD | No       |
 | `enable_postgres`     | bool   | Deploy PostgreSQL + pgAdmin          | No       |
 | `enable_mongo`        | bool   | Deploy MongoDB + Mongo Express       | No       |
+| `enable_redis`        | bool   | Deploy Redis + RedisInsight          | No       |
+| `redis_dump_path`     | string | Local path to a `dump.rdb` file to seed Redis on first deploy (optional) | No |
 | `enable_lazydocker`   | bool   | Deploy Lazydocker TUI for Docker      | No       |
 
 ### Example `terraform.tfvars`
@@ -44,12 +47,16 @@ hcloud_token      = "replace-with-hcloud-token"
 ssh-port          = 443
 enable_postgres   = true
 enable_mongo      = true
+enable_redis      = true
 enable_lazydocker = true
+
+# Optional — seed Redis with an existing dump on first deploy
+# redis_dump_path = "C:/path/to/dump.rdb"
 ```
 
 ## Generated Service Password
 
-Terraform now generates a strong shared password automatically for PostgreSQL, pgAdmin, MongoDB, and Mongo Express.
+Terraform now generates a strong shared password automatically for PostgreSQL, pgAdmin, MongoDB, Mongo Express, Redis, and RedisInsight.
 
 Retrieve it with:
 
@@ -96,6 +103,8 @@ When both stacks are enabled, the command includes:
 - **pgAdmin**: Local port 8900 → Remote port 8080
 - **MongoDB**: Local port 27018 → Remote port 27017
 - **Mongo Express**: Local port 8901 → Remote port 8081
+- **Redis**: Local port 6380 → Remote port 6379
+- **RedisInsight**: Local port 8902 → Remote port 5540
 
 Run the printed SSH command in an external terminal and keep it open while using the services.
 
@@ -156,6 +165,50 @@ Login credentials:
 - Username: `admin`
 - Password: The value from `terraform output -raw password`
 
+### Connecting to Redis
+
+With the SSH tunnel active, connect using:
+
+```bash
+redis-cli -h 127.0.0.1 -p 6380 -a <password>
+```
+
+Or use your Redis client with:
+
+- Host: `127.0.0.1`
+- Port: `6380`
+- Password: The value from `terraform output -raw password`
+
+### Accessing RedisInsight
+
+With the SSH tunnel active, open:
+
+```
+http://127.0.0.1:8902
+```
+
+The Redis instance is pre-configured. Use the value from `terraform output -raw password` if prompted.
+
+### Seeding Redis from a dump file
+
+Set `redis_dump_path` to the local path of a `dump.rdb` file before running `tofu apply`:
+
+```hcl
+redis_dump_path = "C:/path/to/dump.rdb"
+```
+
+**How it works:**
+
+- During initial provisioning, cloud-init starts Redis and then waits indefinitely for the dump file to arrive. Terraform uploads the file over SSH, cloud-init seeds the Redis volume and restarts the container — all before the server reboots. The reboot only fires once the seed is complete.
+- On subsequent applies where the dump file content changes, `triggers_replace` detects the change, Terraform re-uploads the file, and imports it directly into the running Redis instance without a reboot.
+
+To re-seed an existing server without changing the file content, taint the resource and re-apply:
+
+```bash
+tofu taint 'terraform_data.redis_dump_import[0]'
+tofu apply
+```
+
 ## Infrastructure Details
 
 ### Server Specifications
@@ -193,6 +246,20 @@ Login credentials:
 
 - Image: `mongo-express:latest`
 - Port: 8081 (localhost only)
+- Auto-restart: Always
+
+**Redis**
+
+- Image: `redis:trixie`
+- Port: 6379 (localhost only)
+- Data volume: `redisdata`
+- Auto-restart: Always
+
+**RedisInsight**
+
+- Image: `redis/redisinsight:latest`
+- Port: 5540 (localhost only)
+- Data volume: `redisinsight`
 - Auto-restart: Always
 
 ## Outputs
