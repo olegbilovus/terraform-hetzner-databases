@@ -13,6 +13,7 @@ The infrastructure includes:
 - Optional MongoDB 8 + Mongo Express stack
 - Optional Redis + RedisInsight stack
 - Optional Lazydocker TUI for Docker management
+- Optional Redis seeding via direct file path or S3 (using AWS CLI v2)
 - All database/web UI ports bound to loopback for security
 - Persistent Docker volumes for stateful services
 - SSH key pair is generated automatically and saved as `hetzner` (private) and `hetzner.pub` (public) in the project directory. On Windows, the private key file permissions may need to be set manually with `icacls hetzner /inheritance:r /grant:r "$($env:USERNAME):R"`.
@@ -52,7 +53,17 @@ enable_redis      = true
 enable_lazydocker = true
 
 # Optional — seed Redis with an existing dump on first deploy
+# Option A: Local file upload
 # redis_dump_path = "C:/path/to/dump.rdb"
+
+# Option B: S3-compatible download
+# redis_s3 = {
+#   endpoint   = "https://s3.hetzner.com"
+#   bucket     = "my-backups"
+#   key        = "redis/dump.rdb"
+#   access_key = "ACCESS_KEY_ID"
+#   secret_key = "SECRET_ACCESS_KEY"
+# }
 ```
 
 ## Generated Service Password
@@ -69,7 +80,18 @@ terraform output -raw password
 
 ### View Available Ports
 
-Use the structured output for a clean port mapping:
+The SSH tunnel maps the remote services to the following local ports to avoid conflicts with services running on your local machine:
+
+| Service | Local Port | Remote Port | Username | Password |
+| --- | --- | --- | --- | --- |
+| PostgreSQL | `5433` | `5432` | `postgres` | _Auto-generated_ |
+| pgAdmin | `8900` | `8080` | `postgres@example.com` | _Auto-generated_ |
+| MongoDB | `27018` | `27017` | `admin` | _Auto-generated_ |
+| Mongo Express | `8901` | `8081` | `admin` | _Auto-generated_ |
+| Redis | `6380` | `6379` | `default` | _Auto-generated_ |
+| RedisInsight | `8902` | `5540` | - | - (uses password internally) |
+
+Use the structured output for a clean port mapping from Terraform:
 
 ```bash
 terraform output available_ports
