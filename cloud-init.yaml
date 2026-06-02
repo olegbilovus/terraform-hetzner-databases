@@ -104,7 +104,7 @@ runcmd:
   - docker volume create redisinsight
   - docker run --name redis --restart always --network redis-network -p 127.0.0.1:6379:6379 -v redisdata:/data -d redis:trixie redis-server --requirepass ${password}
   - docker run --name redisinsight --restart always -e RI_REDIS_HOST=redis -e RI_REDIS_PORT=6379 -e RI_REDIS_ALIAS=Redis -e RI_REDIS_PASSWORD=${password} --network redis-network -p 127.0.0.1:5540:5540 -v redisinsight:/data -d redis/redisinsight:latest
-%{ if enable_redis_seed ~}
+%{ if enable_redis_seed_file ~}
   - |
     echo "Waiting for Redis dump file from Terraform..."
     while [ ! -f /tmp/dump.rdb ]; do
@@ -117,6 +117,29 @@ runcmd:
     rm -f /tmp/dump.rdb
     docker start redis
     echo "Redis seeded successfully"
+%{ endif ~}
+%{ if enable_redis_seed_s3 ~}
+  - apt-get install -y unzip
+  - curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
+  - unzip -q awscliv2.zip
+  - ./aws/install
+  - rm -rf awscliv2.zip aws
+  - |
+    echo "Downloading Redis dump from S3 (${redis_s3.endpoint})..."
+    AWS_ACCESS_KEY_ID="${redis_s3.access_key}" \
+    AWS_SECRET_ACCESS_KEY="${redis_s3.secret_key}" \
+    aws s3 cp \
+      --endpoint-url "${redis_s3.endpoint}" \
+      --region "${redis_s3.region}" \
+      "s3://${redis_s3.bucket}/${redis_s3.key}" \
+      /tmp/dump.rdb
+    echo "Seeding Redis from S3 dump..."
+    docker stop redis
+    cp /tmp/dump.rdb /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    chmod 644 /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    rm -f /tmp/dump.rdb
+    docker start redis
+    echo "Redis seeded from S3 successfully"
 %{ endif ~}
 %{ endif ~}
 

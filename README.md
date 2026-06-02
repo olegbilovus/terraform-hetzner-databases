@@ -36,7 +36,8 @@ Before deploying, ensure you have:
 | `enable_postgres`     | bool   | Deploy PostgreSQL + pgAdmin          | No       |
 | `enable_mongo`        | bool   | Deploy MongoDB + Mongo Express       | No       |
 | `enable_redis`        | bool   | Deploy Redis + RedisInsight          | No       |
-| `redis_dump_path`     | string | Local path to a `dump.rdb` file to seed Redis on first deploy (optional) | No |
+| `redis_dump_path`     | string | Local path to a `dump.rdb` to upload and seed Redis (mutually exclusive with `redis_s3`) | No |
+| `redis_s3`            | object | S3-compatible source for seeding Redis (mutually exclusive with `redis_dump_path`). Fields: `endpoint`, `bucket`, `key`, `access_key`, `secret_key`, `region` (optional, default `us-east-1`) | Yes |
 | `enable_lazydocker`   | bool   | Deploy Lazydocker TUI for Docker      | No       |
 
 ### Example `terraform.tfvars`
@@ -84,7 +85,7 @@ After deployment, a new SSH key pair will be created in your project directory:
 Use the `hetzner` private key for SSH access and tunneling. Example:
 
 ```bash
-ssh -i hetzner -p <ssh-port> root@<server-ip>
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i hetzner -p <ssh-port> root@<server-ip>
 ```
 
 ### SSH Tunnel
@@ -191,23 +192,41 @@ The Redis instance is pre-configured. Use the value from `terraform output -raw 
 
 ### Seeding Redis from a dump file
 
-Set `redis_dump_path` to the local path of a `dump.rdb` file before running `tofu apply`:
+Two mutually exclusive methods are available. Setting both at the same time is a plan-time error.
+
+#### Option A — local file upload
+
+Terraform uploads the file over SSH and cloud-init imports it before the server reboots:
 
 ```hcl
 redis_dump_path = "C:/path/to/dump.rdb"
 ```
 
-**How it works:**
+During initial provisioning cloud-init waits indefinitely for the file to arrive, imports it into the Redis volume, then proceeds to the reboot. On subsequent applies where the file content changes, `triggers_replace` detects the change and Terraform re-imports directly into the running instance without a reboot.
 
-- During initial provisioning, cloud-init starts Redis and then waits indefinitely for the dump file to arrive. Terraform uploads the file over SSH, cloud-init seeds the Redis volume and restarts the container — all before the server reboots. The reboot only fires once the seed is complete.
-- On subsequent applies where the dump file content changes, `triggers_replace` detects the change, Terraform re-uploads the file, and imports it directly into the running Redis instance without a reboot.
-
-To re-seed an existing server without changing the file content, taint the resource and re-apply:
+To re-seed without changing the file content:
 
 ```bash
 tofu taint 'terraform_data.redis_dump_import[0]'
 tofu apply
 ```
+
+#### Option B — S3-compatible download
+
+The server downloads the dump directly from any S3-compatible storage (Hetzner Object Storage, MinIO, AWS S3, etc.) during cloud-init — no local file or Terraform provisioner needed:
+
+```hcl
+redis_s3 = {
+  endpoint   = "https://s3.hetzner.com"
+  bucket     = "my-backups"
+  key        = "redis/dump.rdb"
+  access_key = "ACCESS_KEY_ID"
+  secret_key = "SECRET_ACCESS_KEY"
+  # region is optional, defaults to us-east-1
+}
+```
+
+The download runs synchronously in cloud-init using `awscli` with `--endpoint-url`, so the reboot only fires after the seed completes. To re-seed on an existing server, run `tofu apply -replace=hcloud_server.db-server` (reprovisioning the server).
 
 ## Infrastructure Details
 

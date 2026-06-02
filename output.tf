@@ -53,7 +53,7 @@ output "available_ports" {
 }
 
 output "ssh-tunnel-cmd" {
-  value = "ssh -i hetzner -p ${var.ssh-port} ${local.ssh_tunnels != "" ? local.ssh_tunnels : ""} root@${hcloud_server.db-server.ipv4_address}"
+  value = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i hetzner -p ${var.ssh-port} ${local.ssh_tunnels != "" ? local.ssh_tunnels : ""} root@${hcloud_server.db-server.ipv4_address}"
 }
 
 output "password" {

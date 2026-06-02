@@ -25,7 +25,9 @@ resource "random_password" "ran_pwd" {
 }
 
 locals {
-  ssh_public_key = trimspace(resource.tls_private_key.ssh-key.public_key_openssh)
+  ssh_public_key         = trimspace(resource.tls_private_key.ssh-key.public_key_openssh)
+  enable_redis_seed_file = var.enable_redis && var.redis_dump_path != ""
+  enable_redis_seed_s3   = var.enable_redis && var.redis_s3 != null
 }
 
 resource "hcloud_ssh_key" "db-server" {
@@ -61,19 +63,35 @@ resource "hcloud_server" "db-server" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
-    public_key        = local.ssh_public_key
-    password          = resource.random_password.ran_pwd.result
-    ssh_port          = var.ssh-port
-    enable_postgres   = var.enable_postgres
-    enable_mongo      = var.enable_mongo
-    enable_redis      = var.enable_redis
-    enable_redis_seed = var.redis_dump_path != ""
-    enable_lazydocker = var.enable_lazydocker
+    public_key             = local.ssh_public_key
+    password               = resource.random_password.ran_pwd.result
+    ssh_port               = var.ssh-port
+    enable_postgres        = var.enable_postgres
+    enable_mongo           = var.enable_mongo
+    enable_redis           = var.enable_redis
+    enable_redis_seed_file = local.enable_redis_seed_file
+    enable_redis_seed_s3   = local.enable_redis_seed_s3
+    redis_s3 = var.redis_s3 != null ? var.redis_s3 : {
+      endpoint   = ""
+      bucket     = ""
+      key        = ""
+      access_key = ""
+      secret_key = ""
+      region     = "us-east-1"
+    }
+    enable_lazydocker      = var.enable_lazydocker
   })
+
+  lifecycle {
+    precondition {
+      condition     = !(local.enable_redis_seed_file && local.enable_redis_seed_s3)
+      error_message = "Set either redis_dump_path or redis_s3_* variables, not both."
+    }
+  }
 }
 
 resource "terraform_data" "redis_dump_import" {
-  count = var.enable_redis && var.redis_dump_path != "" ? 1 : 0
+  count = local.enable_redis_seed_file ? 1 : 0
 
   depends_on = [hcloud_server.db-server]
 
