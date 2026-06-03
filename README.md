@@ -11,12 +11,12 @@ The infrastructure includes:
 - SSH password authentication disabled (`ssh_pwauth: false`)
 - Optional PostgreSQL 18 + pgAdmin4 stack
 - Optional MongoDB 8 + Mongo Express stack
-- Optional Redis + RedisInsight stack
+- Optional Redis 8 (Query Engine: RediSearch + RedisJSON) + RedisInsight stack
 - Optional Lazydocker TUI for Docker management
 - Optional Redis seeding via direct file path or S3 (using AWS CLI v2)
 - All database/web UI ports bound to loopback for security
 - Persistent Docker volumes for stateful services
-- SSH key pair is generated automatically and saved as `hetzner` (private) and `hetzner.pub` (public) in the project directory. On Windows, the private key file permissions may need to be set manually with `icacls hetzner /inheritance:r /grant:r "$($env:USERNAME):R"`.
+- SSH key pair is generated automatically and saved as `hetzner` (private) and `hetzner.pub` (public) in the project directory. On Windows, the private key file permissions may need to be set manually (run from the project dir) — PowerShell: `icacls hetzner /inheritance:r /grant:r "$($env:USERNAME):R"`; cmd.exe: `icacls hetzner /inheritance:r /grant:r "%USERNAME%:R"`.
 
 ## Prerequisites
 
@@ -109,6 +109,17 @@ Use the `hetzner` private key for SSH access and tunneling. Example:
 ```bash
 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i hetzner -p <ssh-port> root@<server-ip>
 ```
+
+### Watch the deployment progress
+
+After `apply`, SSH in and tail the cloud-init log to follow provisioning (Docker
+install, container startup, Redis seeding) in real time:
+
+```bash
+ssh -i hetzner -p <ssh-port> root@<server-ip> 'tail -f /var/log/cloud-init-output.log'
+```
+
+(Or run `tail -f /var/log/cloud-init-output.log` once on the box.)
 
 ### SSH Tunnel
 
@@ -224,7 +235,7 @@ Terraform uploads the file over SSH and cloud-init imports it before the server 
 redis_dump_path = "C:/path/to/dump.rdb"
 ```
 
-During initial provisioning cloud-init waits indefinitely for the file to arrive, imports it into the Redis volume, then proceeds to the reboot. On subsequent applies where the file content changes, `triggers_replace` detects the change and Terraform re-imports directly into the running instance without a reboot.
+During initial provisioning cloud-init waits indefinitely for the file to arrive, imports it into the Redis volume (leaving Redis stopped), then proceeds to the reboot — so Redis loads the dump only once, on that reboot, rather than at seed time and again after the reboot. On subsequent applies where the file content changes, `triggers_replace` detects the change and Terraform re-imports directly into the running instance without a reboot.
 
 To re-seed without changing the file content:
 
@@ -291,7 +302,7 @@ The download runs synchronously in cloud-init using `awscli` with `--endpoint-ur
 
 **Redis**
 
-- Image: `redis:trixie`
+- Image: `redis:8` (includes the Redis Query Engine — RediSearch + RedisJSON)
 - Port: 6379 (localhost only)
 - Data volume: `redisdata`
 - Auto-restart: Always

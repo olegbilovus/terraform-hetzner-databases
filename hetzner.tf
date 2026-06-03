@@ -2,7 +2,10 @@ resource "tls_private_key" "ssh-key" {
   algorithm = "ED25519"
 }
 
-# On windows, the file permission is ignored, you can set it manually with `icacls hetzner /inheritance:r /grant:r "$($env:USERNAME):R"`
+# On Windows the 0600 permission is ignored, so SSH rejects the key
+# ("UNPROTECTED PRIVATE KEY FILE"). Lock it down manually (run from this dir):
+#   PowerShell: icacls hetzner /inheritance:r /grant:r "$($env:USERNAME):R"
+#   cmd.exe:    icacls hetzner /inheritance:r /grant:r "%USERNAME%:R"
 resource "local_file" "ssh_key" {
   content         = resource.tls_private_key.ssh-key.private_key_openssh
   filename        = "${path.module}/hetzner"
@@ -105,7 +108,7 @@ resource "terraform_data" "redis_dump_import" {
     private_key = tls_private_key.ssh-key.private_key_openssh
     port        = var.ssh-port
     # Retries until SSH is available (server may still be mid-boot).
-    timeout = "5m"
+    timeout = "15m"
   }
 
   # Upload the dump so cloud-init's wait loop can pick it up.

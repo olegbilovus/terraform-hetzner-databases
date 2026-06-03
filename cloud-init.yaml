@@ -79,71 +79,7 @@ runcmd:
   - systemctl enable docker
   - systemctl start docker
 
-  # Run postgres and pgadmin containers
-%{ if enable_postgres ~}
-  - docker network create pg-network
-  - docker volume create pgdata
-  - docker volume create pgadmin
-  - docker run --name postgres --restart always -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=${password} --network pg-network -p 127.0.0.1:5432:5432 -v pgdata:/var/lib/postgresql/docker -d postgres:18
-  - chown 5050:5050 /opt/pgadmin/pgpassfile
-  - docker run --name pgadmin --restart always -e PGADMIN_DEFAULT_EMAIL=postgres@example.com -e PGADMIN_DEFAULT_PASSWORD=${password} -e PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False -e PGPASSFILE=/pgadmin4/pgpassfile --network pg-network -p 127.0.0.1:8080:80 -v pgadmin:/var/lib/pgadmin -v /opt/pgadmin/servers.json:/pgadmin4/servers.json:ro -v /opt/pgadmin/pgpassfile:/pgadmin4/pgpassfile -d dpage/pgadmin4:latest
-%{ endif ~}
-
-  # Run MongoDB and Mongo Express containers
-%{ if enable_mongo ~}
-  - docker network create mongo-network
-  - docker volume create mongodata
-  - docker run --name mongo --restart always -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=${password} --network mongo-network -p 127.0.0.1:27017:27017 -v mongodata:/data/db -d mongo:8
-  - docker run --name mongo-express --restart always --env-file /opt/mongo-express/.env --network mongo-network -p 127.0.0.1:8081:8081 -d mongo-express:latest
-%{ endif ~}
-
-  # Run Redis and RedisInsight containers
-%{ if enable_redis ~}
-  - docker network create redis-network
-  - docker volume create redisdata
-  - docker volume create redisinsight
-  - docker run --name redis --restart always --network redis-network -p 127.0.0.1:6379:6379 -v redisdata:/data -d redis:trixie redis-server --requirepass ${password}
-  - docker run --name redisinsight --restart always -e RI_REDIS_HOST=redis -e RI_REDIS_PORT=6379 -e RI_REDIS_ALIAS=Redis -e RI_REDIS_PASSWORD=${password} --network redis-network -p 127.0.0.1:5540:5540 -v redisinsight:/data -d redis/redisinsight:latest
-%{ if enable_redis_seed_file ~}
-  - |
-    echo "Waiting for Redis dump file from Terraform..."
-    while [ ! -f /tmp/dump.rdb ]; do
-      sleep 5
-    done
-    echo "Seeding Redis from dump..."
-    docker stop redis
-    cp /tmp/dump.rdb /var/lib/docker/volumes/redisdata/_data/dump.rdb
-    chmod 644 /var/lib/docker/volumes/redisdata/_data/dump.rdb
-    rm -f /tmp/dump.rdb
-    docker start redis
-    echo "Redis seeded successfully"
-%{ endif ~}
-%{ if enable_redis_seed_s3 ~}
-  - apt-get install -y unzip
-  - curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
-  - unzip -q awscliv2.zip
-  - ./aws/install
-  - rm -rf awscliv2.zip aws
-  - |
-    echo "Downloading Redis dump from S3 (${redis_s3.endpoint})..."
-    AWS_ACCESS_KEY_ID="${redis_s3.access_key}" \
-    AWS_SECRET_ACCESS_KEY="${redis_s3.secret_key}" \
-    aws s3 cp \
-      --endpoint-url "${redis_s3.endpoint}" \
-      --region "${redis_s3.region}" \
-      "s3://${redis_s3.bucket}/${redis_s3.key}" \
-      /tmp/dump.rdb
-    echo "Seeding Redis from S3 dump..."
-    docker stop redis
-    cp /tmp/dump.rdb /var/lib/docker/volumes/redisdata/_data/dump.rdb
-    chmod 644 /var/lib/docker/volumes/redisdata/_data/dump.rdb
-    rm -f /tmp/dump.rdb
-    docker start redis
-    echo "Redis seeded from S3 successfully"
-%{ endif ~}
-%{ endif ~}
-
-  # Install lazydocker 
+  # Install lazydocker (before the containers so it's ready to watch them come up)
 %{ if enable_lazydocker ~}
   - |
     ARCH="$(uname -m)"
@@ -167,6 +103,72 @@ runcmd:
   - chmod +x /usr/local/bin/lazydocker
 %{ endif ~}
 
+  # Run postgres and pgadmin containers
+%{ if enable_postgres ~}
+  - docker network create pg-network
+  - docker volume create pgdata
+  - docker volume create pgadmin
+  - docker run --name postgres --restart always -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=${password} --network pg-network -p 127.0.0.1:5432:5432 -v pgdata:/var/lib/postgresql/docker -d postgres:18
+  - chown 5050:5050 /opt/pgadmin/pgpassfile
+  - docker run --name pgadmin --restart always -e PGADMIN_DEFAULT_EMAIL=postgres@example.com -e PGADMIN_DEFAULT_PASSWORD=${password} -e PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False -e PGPASSFILE=/pgadmin4/pgpassfile --network pg-network -p 127.0.0.1:8080:80 -v pgadmin:/var/lib/pgadmin -v /opt/pgadmin/servers.json:/pgadmin4/servers.json:ro -v /opt/pgadmin/pgpassfile:/pgadmin4/pgpassfile -d dpage/pgadmin4:latest
+%{ endif ~}
+
+  # Run MongoDB and Mongo Express containers
+%{ if enable_mongo ~}
+  - docker network create mongo-network
+  - docker volume create mongodata
+  - docker run --name mongo --restart always -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=${password} --network mongo-network -p 127.0.0.1:27017:27017 -v mongodata:/data/db -d mongo:8
+  - docker run --name mongo-express --restart always --env-file /opt/mongo-express/.env --network mongo-network -p 127.0.0.1:8081:8081 -d mongo-express:latest
+%{ endif ~}
+
+  # Run Redis and RedisInsight containers
+%{ if enable_redis ~}
+  - docker network create redis-network
+  - docker volume create redisdata
+  - docker volume create redisinsight
+  - docker run --name redis --restart always --network redis-network -p 127.0.0.1:6379:6379 -v redisdata:/data -d redis:8 redis-server --requirepass ${password}
+  - docker run --name redisinsight --restart always -e RI_REDIS_HOST=redis -e RI_REDIS_PORT=6379 -e RI_REDIS_ALIAS=Redis -e RI_REDIS_PASSWORD=${password} --network redis-network -p 127.0.0.1:5540:5540 -v redisinsight:/data -d redis/redisinsight:latest
+%{ if enable_redis_seed_file ~}
+  - |
+    echo "Waiting for Redis dump file from Terraform..."
+    while [ ! -f /tmp/dump.rdb ]; do
+      sleep 5
+    done
+    echo "Seeding Redis from dump..."
+    docker stop redis
+    cp /tmp/dump.rdb /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    chmod 644 /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    rm -f /tmp/dump.rdb
+    # Leave Redis stopped — the cloud-init reboot below starts it (restart:always
+    # applies on daemon restart), so the dump loads exactly once (after the
+    # reboot) instead of now AND again after the reboot.
+    echo "Redis seeded; it will load on the post-setup reboot"
+%{ endif ~}
+%{ if enable_redis_seed_s3 ~}
+  - apt-get install -y unzip
+  - curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
+  - unzip -q awscliv2.zip
+  - ./aws/install
+  - rm -rf awscliv2.zip aws
+  - |
+    echo "Downloading Redis dump from S3 (${redis_s3.endpoint})..."
+    AWS_ACCESS_KEY_ID="${redis_s3.access_key}" \
+    AWS_SECRET_ACCESS_KEY="${redis_s3.secret_key}" \
+    aws s3 cp \
+      --endpoint-url "${redis_s3.endpoint}" \
+      --region "${redis_s3.region}" \
+      "s3://${redis_s3.bucket}/${redis_s3.key}" \
+      /tmp/dump.rdb
+    echo "Seeding Redis from S3 dump..."
+    docker stop redis
+    cp /tmp/dump.rdb /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    chmod 644 /var/lib/docker/volumes/redisdata/_data/dump.rdb
+    rm -f /tmp/dump.rdb
+    # Leave Redis stopped — see the note in the file-seed block; the reboot starts
+    # it, so the dump loads once (after the reboot).
+    echo "Redis seeded from S3; it will load on the post-setup reboot"
+%{ endif ~}
+%{ endif ~}
 
 power_state:
   delay: now
