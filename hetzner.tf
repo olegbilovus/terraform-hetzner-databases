@@ -82,7 +82,7 @@ resource "hcloud_server" "db-server" {
       secret_key = ""
       region     = "us-east-1"
     }
-    enable_lazydocker      = var.enable_lazydocker
+    enable_lazydocker = var.enable_lazydocker
   })
 
   lifecycle {
@@ -98,8 +98,9 @@ resource "terraform_data" "redis_dump_import" {
 
   depends_on = [hcloud_server.db-server]
 
-  # Re-run whenever the dump file content changes.
-  triggers_replace = [filesha256(var.redis_dump_path)]
+  # Re-run when the dump changes OR the server is replaced (new id), so a
+  # recreated server is re-seeded.
+  triggers_replace = [filesha256(var.redis_dump_path), hcloud_server.db-server.id]
 
   connection {
     type        = "ssh"
