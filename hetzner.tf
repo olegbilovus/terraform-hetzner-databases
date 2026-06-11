@@ -53,7 +53,7 @@ resource "hcloud_firewall" "ssh-only" {
 
 resource "hcloud_server" "db-server" {
   name        = "db-server"
-  image       = "ubuntu-24.04"
+  image       = "ubuntu-26.04"
   server_type = "cx23"
   location    = "fsn1"
 
